@@ -1,0 +1,144 @@
+module import {
+    std.System[exit|login_name]   std.Files[*]
+
+    std.Terminal[Terminal:term]   std.KeyBinder[on_key]
+    std.DateTime[today|now]       std.Shell[Shell]
+    std.TUIX[*]                   std.Path[*]
+}
+
+pylib: platform
+
+/!/--------------------INFO:--------------------/!/
+// Project : DeltaShell                  (dish) //
+// Author  : RejziDich                          //
+// Team    : CodeLibraty                 (CLt)  //
+// Version : 0.0.1                              //
+// License : RytonOpenSource-License 1.0 (ROSL) //
+// Arch    : Simple and Fast Approach    (SaFA) //
+/!/---------------------------------------------/!/
+
+pack DeltaShell {
+    init {
+        this.os     = platform.freedesktop_os_release()["NAME"]
+        this.login  = login_name()
+        this.cwd    = pwd().replace(f'/home/{this.login}', '~')
+
+        this.term_size = term.get_size()
+    }
+
+    func cmd_ls(this) {
+        items = ls()
+        
+        dirs = []
+        files = []
+        
+        for item in items {
+            full_path = os.path.join(pwd(), item)
+            if item.startswith('.') => continue
+            if is_dir(full_path)    => dirs.append(item)
+            elif is_file(full_path) => files.append(item)
+        }
+        
+        dirs.sort() :: files.sort()
+
+        num_files = len(files)
+        printed_files = []
+
+        for i, d in enumerate(dirs, 1) {
+            dir_indent = 0
+            if files <= dirs {
+                dir_indent += 2
+                if i % 3 == 0 {
+                    print()
+                }
+            }
+
+            indent_multiplier = 1.5
+
+            dir_indent = " " * (
+                this.term_size[0] -
+                len(d) - 
+                int(
+                    (
+                        this.term_size[0] / 2
+                    ) * indent_multiplier
+                )
+            )
+
+            print(f"<blue>{d}{dir_indent}</blue>", end=' ')
+
+            indent_multiplier = 1.2
+            num_files -= 1
+            indent = " " 
+
+            for f in files[num_files:] {
+                printed_files.append(f)
+                print(f"{indent}{f}")
+                break
+            }          
+        }
+
+        no_printed_files = len(files) - len(printed_files)
+        if no_printed_files == 0 => print()
+        else => for f in files[:no_printed_files] { :: print(f) :: }
+    }
+
+    func cmd_cd(this, cmd: String) !validate {
+        command = cmd.split()
+        if command[0] == 'cd' => cd(command[1])
+        else => cd(command[0])
+    }
+
+    func cmd_time(this) {
+        now_time = now()
+        now_time = String(now_time)
+                   | .split(' ')[1]
+                   | .split('.')
+
+        print(now_time[0])
+    }
+
+    func command_run(this, command: String) !validate {
+        if command == '' => noop
+        else {
+            try => Shell.rt_run(this, cmd=command)
+        }
+    }
+
+    func Main(this) {
+        infinit 0.05 {
+            this.term_size = term.get_size()
+            this.cwd       = pwd().replace(f'/home/{this.login}', '~')
+            term_tab = ' ' * (this.term_size[0]
+                                - len(this.login)
+                                - len(this.cwd)
+                                - len(this.os)
+                                - 9
+                             )
+            
+            print(f"<round_dr><line_h> {this.cwd} {term_tab} {this.os} <square> {this.login} ")
+            cmd = input("╰─ ")
+
+            switch(value=cmd, context=this)
+            | .case('exit',   func(this)      { exit()                 })
+            | .case('clear',  func(this)      { term.clear()           })
+            | .case('time',   func(this)      { this.cmd_time()        })
+            | .case('ls',     func(this)      { this.cmd_ls()          })
+            | .case('cd ',    func(this)      { this.cmd_cd(cmd)       })
+            | .case('cd ~',   func(this)      { this.cmd_cd('Home')    })
+            | .case('cd ..',  func(this)      { this.cmd_cd('..')      })
+            | .case('cd',     func(this)      { this.cmd_cd('Home')    })
+            |.else_(          func(this, cmd) { this.command_run(cmd)  })
+
+        }
+    }
+}
+
+func Main {
+    shell = DeltaShell()
+    try {
+        shell.Main()
+    } elerr KeyboardInterrupt {
+        shell.Main()
+    }
+}
